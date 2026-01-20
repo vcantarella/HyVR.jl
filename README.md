@@ -1,6 +1,12 @@
 # HyVR.jl
 
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://vcantarella.github.io/HyVR.jl/dev/)
+[![Build Status](https://github.com/vcantarella/HyVR.jl/actions/workflows/Test.yml/badge.svg?branch=main)](https://github.com/vcantarella/HyVR.jl/actions/workflows/Test.yml?query=branch%3Amain)
+[![codecov](https://codecov.io/gh/vcantarella/HyVR.jl/graph/badge.svg?token=AP09UVR42M)](https://codecov.io/gh/vcantarella/HyVR.jl)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A Julia implementation of the [HyVR](https://github.com/driftingtides/hyvr) (Hydrogeological Virtual Reality) package. This package simulates sedimentary heterogeneity using an object-based approach, creating 3D grids of hydraulic properties (facies, dip, dip direction) for groundwater modeling.
+
 
 ## Features
 
