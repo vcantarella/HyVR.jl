@@ -1,0 +1,22 @@
+name = "HyVR"
+uuid = "56907f30-c0b9-4f8e-99c0-800475654321"
+authors = ["Vitor Cantarella", "Jeremy Bennet"]
+version = "0.1.0"
+
+[deps]
+OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
+FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
+[compat]
+julia = "1.10"
+OrdinaryDiffEq = "6"
+FFTW = "1"
+Interpolations = "0.15"
+KernelAbstractions = "0.9"
+StaticArrays = "1"

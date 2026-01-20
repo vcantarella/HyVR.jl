@@ -1,0 +1,12 @@
+# Changes here will be overwritten by Copier
+Authors: Vitor Cantarella vcantarella@gmail.com
+JuliaMinVersion: '1.10'
+License: MIT
+LicenseCopyrightHolders: Vitor Cantarella vcantarella@gmail.com
+PackageName: HyVR
+PackageOwner: vcantarella
+PackageUUID: 9004e290-3ebd-56de-8ed7-b9c23420ed7d
+StrategyConfirmIncluded: false
+StrategyLevel: 1
+StrategyReviewExcluded: false
+_src_path: C:\Users\vcant\.julia\packages\BestieTemplate\GuTb8
