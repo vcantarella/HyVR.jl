@@ -12,3 +12,4 @@ env
 node_modules
 hyvr/
 examples/Manifest
+.copier-answers.yml
