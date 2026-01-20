@@ -171,10 +171,11 @@ for (idx, thick) in enumerate(thicknesses)
     # Python script loops channels and stores in (N_points, N_channels) array, then takes min(axis=1)
 
     min_dist_global = fill(Inf, length(x_flat))
+    dists = similar(x_flat)
 
     for ch in total_channels
         cx, cy = ch[1], ch[2]
-        dists = compute_min_distance(cx, cy, x_flat, y_flat)
+        compute_min_distance!(dists, cx, cy, x_flat, y_flat)
         min_dist_global .= min.(min_dist_global, dists)
     end
 
@@ -414,7 +415,8 @@ while true
     )
     # Check coverage
     cx, cy = gravel_channel_data[1], gravel_channel_data[2]
-    dists = compute_min_distance(cx, cy, P_0_x, P_0_y)
+    dists = similar(P_0_x)
+    compute_min_distance!(dists, cx, cy, P_0_x, P_0_y)
     count_close = count(dists .< 200) # What distance threshold? Python uses values < 200? No, indices. 
     # Python: indexes = np.where(min_distance_arr < 200). 
     # Wait, 200 is the distance threshold? Or count?
@@ -449,7 +451,8 @@ for h_val in heights
     y_tufa = y_3d[mask_tufa]
 
     cx, cy = gravel_channel[1], gravel_channel[2]
-    dists = compute_min_distance(cx, cy, x_tufa, y_tufa)
+    dists = similar(x_tufa)
+    compute_min_distance!(dists, cx, cy, x_tufa, y_tufa)
 
     # Indices in the subset where dist < 200
     valid_indices = findall(dists .< 200.0)

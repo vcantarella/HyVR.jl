@@ -13,7 +13,7 @@ export coterminal_angle,
     get_alternating_facies,
     min_distance_kernel,
     min_distance_sq_kernel,
-    compute_min_distance
+    compute_min_distance!
 
 """
     coterminal_angle(angle)
@@ -183,9 +183,8 @@ end
     d_array[i] = sqrt(dist_sq)
 end
 
-function compute_min_distance(curve_x, curve_y, px, py)
+function compute_min_distance!(d_array, curve_x, curve_y, px, py)
     backend = get_backend(px)
-    d_array = similar(px, Float64)
     kernel! = min_distance_kernel!(backend)
     kernel!(d_array, px, py, curve_x, curve_y, ndrange = length(px))
     KernelAbstractions.synchronize(backend)

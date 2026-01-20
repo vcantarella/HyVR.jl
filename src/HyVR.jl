@@ -18,6 +18,6 @@ using .Sheet
 using .Channel
 
 export half_ellipsoid!, sheet!, channel!
-export ferguson_curve, specsim_surface, contact_surface, compute_min_distance
+export ferguson_curve, specsim_surface, contact_surface, compute_min_distance!
 
 end # module
