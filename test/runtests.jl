@@ -18,44 +18,47 @@ using Statistics
     end
 
     @testset "Trough (Half Ellipsoid)" begin
-        # Create grid
-        x = [i for i = 0.0:1.0:10.0, j = 0.0:1.0:10.0, k = 0.0:1.0:5.0]
-        y = [j for i = 0.0:1.0:10.0, j = 0.0:1.0:10.0, k = 0.0:1.0:5.0]
-        z = [k for i = 0.0:1.0:10.0, j = 0.0:1.0:10.0, k = 0.0:1.0:5.0]
+        # 1. Create Grid (Uniform)
+        # Old: x = 0:1:10 (11 points), y = 0:1:10 (11 points), z = 0:1:5 (6 points)
+        origin = (0.0, 0.0, 0.0)
+        spacing = (1.0, 1.0, 1.0)
+        dims = (11, 11, 6)
+        
+        grid = UniformGrid(origin, spacing, dims)
 
-        f_array = fill(-1, size(x))
-        dip = zeros(size(x))
-        dip_dir = zeros(size(x))
+        # Initialize Data Arrays
+        # Note: dims in UniformGrid are (nx, ny, nz), so we allocate size(dims)
+        f_array = fill(-1, dims)
+        dip = zeros(dims)
+        dip_dir = zeros(dims)
 
         center = (5.0, 5.0, 5.0)
-        dims = (4.0, 2.0, 2.0)
+        obj_dims = (4.0, 2.0, 2.0)
         azim = 0.0
         facies = 1
 
-        half_ellipsoid!(f_array, dip, dip_dir, x, y, z, center, dims, azim, facies)
+        # 2. Call with Grid Object (No x, y, z arrays!)
+        half_ellipsoid!(f_array, dip, dip_dir, grid, center, obj_dims, azim, facies)
 
         # Check that some points are filled
         @test any(f_array .== 1)
 
         # Check center point (should be inside)
-        # Index corresponding to 5.0, 5.0, 5.0 -> indices (6, 6, 6) since 0-based grid + 1
-        # z max index is 6 (0 to 5)
+        # Index (6, 6, 6) corresponds to 5.0, 5.0, 5.0
         @test f_array[6, 6, 6] == 1
     end
 
     @testset "Sheet" begin
-        x = zeros(5, 5, 5) # Dummy
-        # Real grid
-        x = [i for i = 1:5, j = 1:5, k = 1:5]
-        y = [j for i = 1:5, j = 1:5, k = 1:5]
-        z = [k for i = 1:5, j = 1:5, k = 1:5]
+        # Grid: 5x5x5
+        grid = UniformGrid((1.0, 1.0, 1.0), (1.0, 1.0, 1.0), (5, 5, 5))
 
-        f_array = fill(-1, size(x))
-        dip = zeros(size(x))
-        dip_dir = zeros(size(x))
+        f_array = fill(-1, (5, 5, 5))
+        dip = zeros((5, 5, 5))
+        dip_dir = zeros((5, 5, 5))
 
         # Sheet from z=2 to z=4
-        sheet!(f_array, dip, dip_dir, x, y, z, -Inf, Inf, -Inf, Inf, 2.0, 4.0, 2)
+        # Note: bounds are passed as scalars
+        sheet!(f_array, dip, dip_dir, grid, -Inf, Inf, -Inf, Inf, 2.0, 4.0, 2)
 
         @test f_array[3, 3, 3] == 2 # z=3 inside
         @test f_array[3, 3, 1] == -1 # z=1 outside
@@ -63,7 +66,6 @@ using Statistics
     end
 
     @testset "Tools: Ferguson Curve" begin
-        # Test generation
         x, y, vx, vy, s = ferguson_curve(
             h = 0.1,
             k = π/60,
@@ -81,24 +83,19 @@ using Statistics
     end
 
     @testset "Tools: Specsim" begin
-        # 2D Grid
+        # Specsim still uses 2D arrays because it relies on FFT
         xs = 0:1.0:100.0
         ys = 0:1.0:100.0
         x = [i for i in xs, j in ys]
         y = [j for i in xs, j in ys]
 
         mean_val = 10.0
-        var_val = 4.0 # std = 2.0
-        corl = [5.0, 5.0] # Correlation length smaller than domain for ergodicity
-
-        # We perform multiple realizations to check ensemble statistics better, 
-        # or just one large one. Let's do one large one.
+        var_val = 4.0 
+        corl = [5.0, 5.0]
 
         field = specsim_surface(x, y, mean_val, var_val, corl)
 
         @test size(field) == size(x)
-
-        # Check statistics (allow for some sample variance)
         sample_mean = mean(field)
         sample_var = var(field)
 
@@ -106,8 +103,6 @@ using Statistics
         println("Specsim: Input Var=$var_val, Sample Var=$sample_var")
 
         @test isapprox(sample_mean, mean_val, atol = 0.5)
-        # Variance converges slower, use rough check
         @test isapprox(sample_var, var_val, rtol = 0.5)
     end
-
 end

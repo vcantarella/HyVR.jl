@@ -2,14 +2,14 @@ module Channel
 
 using KernelAbstractions
 using ..Utils
-using GWGrids
+using ..Grids
 export channel!
 
 @kernel function channel_kernel!(
     f_array,
     dip_array,
     dip_dir_array,
-    @Const(grid::AbstractGWGrid),
+    @Const(grid::HyVRGrid),
     @Const(z_top),
     @Const(curve_x),
     @Const(curve_y),
@@ -21,7 +21,7 @@ export channel!
     @Const(dip),
     @Const(layer_dist),
 )
-    I = @index(Global)
+    I = @index(Global, Cartesian)
 
     xi, yi, zi = get_xyz(grid, I)
 
@@ -70,7 +70,7 @@ function channel!(
     f_array,
     dip_array,
     dip_dir_array,
-    grid::AbstractGWGrid,
+    grid::HyVRGrid,
     z_top,
     curve,
     parabola_pars,
@@ -112,7 +112,7 @@ function channel!(
         alternating_facies,
         dip,
         layer_dist;
-        ndrange = size(f_array),
+        ndrange = grid_size(grid),
     )
 
     KernelAbstractions.synchronize(backend)

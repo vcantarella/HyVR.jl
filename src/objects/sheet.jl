@@ -2,14 +2,14 @@ module Sheet
 
 using KernelAbstractions
 using ..Utils
-using GWGrids
+using ..Grids
 export sheet!
 
 @kernel function sheet_kernel!(
     f_array,
     dip_array,
     dip_dir_array,
-    @Const(grid::AbstractGWGrid),
+    @Const(grid::HyVRGrid),
     @Const(xmin),
     @Const(xmax),
     @Const(ymin),
@@ -23,7 +23,7 @@ export sheet!
     @Const(dip_dir),
     @Const(layer_dist),
 )
-    I = @index(Global)
+    I = @index(Global, Cartesian)
 
     xi, yi, zi = get_xyz(grid, I)
 
@@ -100,7 +100,7 @@ function sheet!(
     f_array,
     dip_array,
     dip_dir_array,
-    grid::AbstractGWGrid,
+    grid::HyVRGrid,
     xmin,
     xmax,
     ymin,
@@ -163,7 +163,7 @@ function sheet!(
         dip,
         dip_dir,
         layer_dist;
-        ndrange = size(f_array),
+        ndrange = grid_size(grid),
     )
 
     KernelAbstractions.synchronize(backend)
