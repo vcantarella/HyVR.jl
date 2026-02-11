@@ -2,6 +2,7 @@ module Trough
 
 using KernelAbstractions
 using ..Utils
+using GWGrids
 
 export half_ellipsoid!
 
@@ -14,9 +15,7 @@ In-place modification of arrays for trough object.
     f_array,
     dip_array,
     dip_dir_array,
-    @Const(x),
-    @Const(y),
-    @Const(z),
+    @Const(grid::AbstractGWGrid),
     @Const(x_c),
     @Const(y_c),
     @Const(z_c),
@@ -37,9 +36,7 @@ In-place modification of arrays for trough object.
     I = @index(Global, Cartesian)
 
     # 1. Check if point is inside
-    xi = x[I]
-    yi = y[I]
-    zi = z[I]
+    xi, yi, zi = get_xyz(grid,x[I])
 
     # Quick bounding box check (optional optimization, but we usually launch strictly or rely on fast fail)
     # The kernel launch range should ideally be the bounding box.
@@ -149,9 +146,7 @@ function half_ellipsoid!(
     f_array,
     dip_array,
     dip_dir_array,
-    x,
-    y,
-    z,
+    grid::AbstractGWGrid,
     center_coords,
     dims,
     azim,
@@ -215,9 +210,7 @@ function half_ellipsoid!(
         f_array,
         dip_array,
         dip_dir_array,
-        x,
-        y,
-        z,
+        grid,
         x_c,
         y_c,
         z_c,

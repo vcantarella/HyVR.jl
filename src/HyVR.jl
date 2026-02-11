@@ -1,6 +1,9 @@
 module HyVR
 
 using KernelAbstractions
+using GWGrids
+
+AbstractGWGrid = GWGrids.AbstractGWGrid
 
 # Submodules
 include("utils.jl")

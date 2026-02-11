@@ -2,34 +2,30 @@ module Sheet
 
 using KernelAbstractions
 using ..Utils
-
+using GWGrids
 export sheet!
 
 @kernel function sheet_kernel!(
     f_array,
     dip_array,
     dip_dir_array,
-    @Const(x),
-    @Const(y),
-    @Const(z),
-    xmin,
-    xmax,
-    ymin,
-    ymax,
-    bottom_surf,
-    top_surf,
-    facies_val,
-    internal_layering,
-    alternating_facies,
-    dip,
-    dip_dir,
-    layer_dist,
+    @Const(grid::AbstractGWGrid),
+    @Const(xmin),
+    @Const(xmax),
+    @Const(ymin),
+    @Const(ymax),
+    @Const(bottom_surf),
+    @Const(top_surf),
+    @Const(facies_val),
+    @Const(internal_layering),
+    @Const(alternating_facies),
+    @Const(dip),
+    @Const(dip_dir),
+    @Const(layer_dist),
 )
     I = @index(Global)
 
-    xi = x[I]
-    yi = y[I]
-    zi = z[I]
+    xi, yi, zi = get_xyz(grid, I)
 
     # Surface lookups
     # If bottom_surf and top_surf are arrays (2D), we need to map 3D index I to 2D index.
@@ -104,9 +100,7 @@ function sheet!(
     f_array,
     dip_array,
     dip_dir_array,
-    x,
-    y,
-    z,
+    grid::AbstractGWGrid,
     xmin,
     xmax,
     ymin,
@@ -116,9 +110,9 @@ function sheet!(
     facies;
     internal_layering = false,
     alternating_facies = false,
-    dip = 0.0,
-    dip_dir = 0.0,
-    layer_dist = 0.0,
+    dip = 0,
+    dip_dir = 0,
+    layer_dist = 0,
 )
 
     backend = get_backend(f_array)
@@ -156,9 +150,7 @@ function sheet!(
         f_array,
         dip_array,
         dip_dir_array,
-        x,
-        y,
-        z,
+        grid,
         xmin,
         xmax,
         ymin,

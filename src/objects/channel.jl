@@ -2,32 +2,28 @@ module Channel
 
 using KernelAbstractions
 using ..Utils
-
+using GWGrids
 export channel!
 
 @kernel function channel_kernel!(
     f_array,
     dip_array,
     dip_dir_array,
-    @Const(x),
-    @Const(y),
-    @Const(z),
-    z_top,
+    @Const(grid::AbstractGWGrid),
+    @Const(z_top),
     @Const(curve_x),
     @Const(curve_y),
-    width,
-    depth,
-    facies_val,
-    internal_layering,
-    alternating_facies,
-    dip,
-    layer_dist,
+    @Const(width),
+    @Const(depth),
+    @Const(facies_val),
+    @Const(internal_layering),
+    @Const(alternating_facies),
+    @Const(dip),
+    @Const(layer_dist),
 )
     I = @index(Global)
 
-    xi = x[I]
-    yi = y[I]
-    zi = z[I]
+    xi, yi, zi = get_xyz(grid, I)
 
     dz = zi - z_top
 
@@ -74,9 +70,7 @@ function channel!(
     f_array,
     dip_array,
     dip_dir_array,
-    x,
-    y,
-    z,
+    grid::AbstractGWGrid,
     z_top,
     curve,
     parabola_pars,
@@ -107,9 +101,7 @@ function channel!(
         f_array,
         dip_array,
         dip_dir_array,
-        x,
-        y,
-        z,
+        grid,
         z_top,
         curve_x,
         curve_y,
