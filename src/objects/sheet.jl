@@ -125,7 +125,9 @@ function sheet!(
 
     # Broadcast surfaces if they are scalars
     if isa(bottom_surface, Number)
-        bottom_surface = fill(bottom_surface, size(f_array))
+        val = bottom_surface
+        bottom_surface = similar(f_array, typeof(val))
+        fill!(bottom_surface, val)
     elseif ndims(bottom_surface) == 2
         # If 2D, we assume it's xy (or whatever the first 2 dims are) and replicate along z.
         # This depends on grid orientation.
@@ -138,7 +140,9 @@ function sheet!(
     end
 
     if isa(top_surface, Number)
-        top_surface = fill(top_surface, size(f_array))
+        val = top_surface
+        top_surface = similar(f_array, typeof(val))
+        fill!(top_surface, val)
     end
 
     # Move to backend

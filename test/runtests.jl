@@ -67,9 +67,9 @@ using Statistics
         x, y, vx, vy, s = ferguson_curve(
             h = 0.1,
             k = π/60,
-            eps_factor = 0.01,
-            flow_angle = 0.0,
-            s_max = 100.0,
+            ϵ = 0.01,
+            θ = 0.0,
+            sₘ = 100.0,
             xstart = 0.0,
             ystart = 0.0,
         )

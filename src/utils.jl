@@ -27,18 +27,28 @@ Input angle is in degrees.
 end
 
 @inline function rotation_matrix_x(alpha)
+    o = one(alpha)
+    z = zero(alpha)
+    c = cos(alpha)
+    s = sin(alpha)
+
     return @SMatrix [
-        1.0 0.0 0.0;
-        0.0 cos(alpha) -sin(alpha);
-        0.0 sin(alpha) cos(alpha)
+        o z z;
+        z c -s;
+        z s c
     ]
 end
 
 @inline function rotation_matrix_z(alpha)
+    o = one(alpha)
+    z = zero(alpha)
+    c = cos(alpha)
+    s = sin(alpha)
+
     return @SMatrix [
-        cos(alpha) -sin(alpha) 0.0;
-        sin(alpha) cos(alpha) 0.0;
-        0.0 0.0 1.0
+        c -s z;
+        s c z;
+        z z o
     ]
 end
 

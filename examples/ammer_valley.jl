@@ -133,9 +133,9 @@ for (idx, thick) in enumerate(thicknesses)
         curve_data = ferguson_curve(
             h = 0.3,
             k = π/200,
-            eps_factor = (π/1.5)^2,
-            flow_angle = 0.0,
-            s_max = 1500.0,
+            ϵ = (π/1.5)^2,
+            θ = 0.0,
+            sₘ = 1500.0,
             xstart = -500.0,
             ystart = ystart,
         )
@@ -151,9 +151,9 @@ for (idx, thick) in enumerate(thicknesses)
             branch_data = ferguson_curve(
                 h = 0.3,
                 k = π/200,
-                eps_factor = (π/1.5)^2,
-                flow_angle = rand(Uniform(-π/18, π/18)),
-                s_max = 1000.0,
+                ϵ = (π/1.5)^2,
+                θ = rand(Uniform(-π/18, π/18)),
+                sₘ = 1000.0,
                 xstart = xp,
                 ystart = yp,
             )
@@ -407,9 +407,9 @@ while true
     gravel_channel_data = ferguson_curve(
         h = 0.3,
         k = π/200,
-        eps_factor = π^2,
-        flow_angle = 0.0,
-        s_max = 1500.0 - x_c,
+        ϵ = π^2,
+        θ = 0.0,
+        sₘ = 1500.0 - x_c,
         xstart = x_c,
         ystart = y_c,
     )

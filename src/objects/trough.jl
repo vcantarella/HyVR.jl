@@ -17,22 +17,24 @@ In-place modification of arrays for trough object.
     @Const(x),
     @Const(y),
     @Const(z),
-    x_c,
-    y_c,
-    z_c,
-    a,
-    b,
-    c,
-    alpha,
-    facies_val,
-    internal_layering,
-    alternating_facies,
-    bulb,
-    dip_limit,
-    dip_dir_val,
-    layer_dist,
+    @Const(x_c),
+    @Const(y_c),
+    @Const(z_c),
+    @Const(a),
+    @Const(b),
+    @Const(c),
+    @Const(alpha),
+    @Const(facies_val),
+    @Const(internal_layering),
+    @Const(alternating_facies),
+    @Const(bulb),
+    @Const(dip_limit),
+    @Const(dip_dir_val),
+    @Const(layer_dist),
+    @Const(box_min),
+    @Const(box_max)
 )
-    I = @index(Global)
+    I = @index(Global, Cartesian)
 
     # 1. Check if point is inside
     xi = x[I]
@@ -41,98 +43,103 @@ In-place modification of arrays for trough object.
 
     # Quick bounding box check (optional optimization, but we usually launch strictly or rely on fast fail)
     # The kernel launch range should ideally be the bounding box.
+    if xi ≥ box_min[1] || xi ≤ box_max[1] ||
+       yi ≥ box_min[2] || yi ≤ box_max[2] ||
+       zi ≥ box_min[3] || zi ≤ box_max[3]
+        
 
-    # Semi-ellipsoid check: z <= z_c
-    if zi <= z_c
-        inside = is_point_inside_ellipsoid(xi, yi, zi, x_c, y_c, z_c, a, b, c, alpha)
+        # Semi-ellipsoid check: z <= z_c
+        if zi <= z_c
+            inside = is_point_inside_ellipsoid(xi, yi, zi, x_c, y_c, z_c, a, b, c, alpha)
 
-        if inside
-            # Calculate properties
-            if bulb
-                dip_out, dip_dir_out, norm_dist = dip_dip_dir_bulbset(
-                    xi,
-                    yi,
-                    zi,
-                    x_c,
-                    y_c,
-                    z_c,
-                    a,
-                    b,
-                    c,
-                    alpha,
-                    dip_limit,
-                )
+            if inside
+                # Calculate properties
+                if bulb
+                    dip_out, dip_dir_out, norm_dist = dip_dip_dir_bulbset(
+                        xi,
+                        yi,
+                        zi,
+                        x_c,
+                        y_c,
+                        z_c,
+                        a,
+                        b,
+                        c,
+                        alpha,
+                        dip_limit,
+                    )
 
-                # Assign Facies
-                if internal_layering
-                    # This requires facies array logic which is hard in kernel without alloc
-                    # Simplification: Calculate index and map to facies value if facies is passed as scalar or tuple
-                    # Since facies can be an array, we pass it.
-                    # Note: accessing arrays in kernels is fine.
+                    # Assign Facies
+                    if internal_layering
+                        # This requires facies array logic which is hard in kernel without alloc
+                        # Simplification: Calculate index and map to facies value if facies is passed as scalar or tuple
+                        # Since facies can be an array, we pass it.
+                        # Note: accessing arrays in kernels is fine.
 
-                    # n_layers calculation
-                    # Python: n_layers = int(ceil(max(norm_dist) * c / layer_dist))
-                    # We can't know max(norm_dist) for the whole object here easily without a separate pass.
-                    # However, max norm_dist is 1.0 at boundary.
-                    # So max_dist approx c (in Z) or scaled.
-                    # Actually norm_distance is normalized. Max is 1.
+                        # n_layers calculation
+                        # Python: n_layers = int(ceil(max(norm_dist) * c / layer_dist))
+                        # We can't know max(norm_dist) for the whole object here easily without a separate pass.
+                        # However, max norm_dist is 1.0 at boundary.
+                        # So max_dist approx c (in Z) or scaled.
+                        # Actually norm_distance is normalized. Max is 1.
 
-                    # Facies calculation
-                    # ns = floor(norm_dist * c / layer_dist)
+                        # Facies calculation
+                        # ns = floor(norm_dist * c / layer_dist)
 
-                    # We need to handle alternating facies logic.
-                    # If we just mod index, it works.
+                        # We need to handle alternating facies logic.
+                        # If we just mod index, it works.
 
-                    # Assuming facies is a 1D array on GPU/CPU
+                        # Assuming facies is a 1D array on GPU/CPU
 
-                    # idx = floor(Int, norm_dist * c / layer_dist) + 1
-                    # val = facies[mod1(idx, length(facies))]
-                    # f_array[I] = val
+                        # idx = floor(Int, norm_dist * c / layer_dist) + 1
+                        # val = facies[mod1(idx, length(facies))]
+                        # f_array[I] = val
 
-                    # Placeholder for exact logic:
-                    # Python logic uses 'get_alternating_facies' pre-calc.
-                    # We can emulate modulo.
+                        # Placeholder for exact logic:
+                        # Python logic uses 'get_alternating_facies' pre-calc.
+                        # We can emulate modulo.
 
-                    layer_idx = floor(Int, norm_dist * c / layer_dist) + 1
-                    # Alternating logic usually just cycles through the available facies
-                    # If not alternating, it chooses random. Random in kernel is tricky.
-                    # We assume alternating=True or just deterministic mapping for reproduction.
+                        layer_idx = floor(Int, norm_dist * c / layer_dist) + 1
+                        # Alternating logic usually just cycles through the available facies
+                        # If not alternating, it chooses random. Random in kernel is tricky.
+                        # We assume alternating=True or just deterministic mapping for reproduction.
 
-                    f_idx = mod1(layer_idx, length(facies_val)) # facies_val is the array
-                    f_array[I] = facies_val[f_idx]
+                        f_idx = mod1(layer_idx, length(facies_val)) # facies_val is the array
+                        f_array[I] = facies_val[f_idx]
+
+                    else
+                        # Homogeneous
+                        # facies_val might be array, take first or if scalar
+                        f_array[I] = facies_val[1]
+                    end
+
+                    dip_array[I] = dip_out
+                    dip_dir_array[I] = dip_dir_out
 
                 else
-                    # Homogeneous
-                    # facies_val might be array, take first or if scalar
-                    f_array[I] = facies_val[1]
+                    # Massive or planar internal
+                    if internal_layering
+                        nx, ny, nz = normal_plane_from_dip_dip_dir(dip_limit, dip_dir_val)
+                        # shift = layer_dist + nx*x_c + ny*y_c + nz*z_c
+                        shift = layer_dist + nx*x_c + ny*y_c + nz*z_c
+                        plane_dist = xi*nx + yi*ny + zi*nz - shift
+
+                        # ns = floor(plane_dist / layer_dist) + (n_layers // 2)
+                        # We approximate n_layers center.
+                        # Just use plane_dist / layer_dist
+
+                        layer_idx = floor(Int, abs(plane_dist) / layer_dist) + 1
+                        f_idx = mod1(layer_idx, length(facies_val))
+                        f_array[I] = facies_val[f_idx]
+                    else
+                        f_array[I] = facies_val[1]
+                    end
+
+                    dip_rad = deg2rad(dip_limit)
+                    dip_dir_rad = coterminal_angle(dip_dir_val)
+                    dip_array[I] = dip_rad
+                    dip_dir_array[I] = dip_dir_rad
                 end
-
-                dip_array[I] = dip_out
-                dip_dir_array[I] = dip_dir_out
-
-            else
-                # Massive or planar internal
-                if internal_layering
-                    nx, ny, nz = normal_plane_from_dip_dip_dir(dip_limit, dip_dir_val)
-                    # shift = layer_dist + nx*x_c + ny*y_c + nz*z_c
-                    shift = layer_dist + nx*x_c + ny*y_c + nz*z_c
-                    plane_dist = xi*nx + yi*ny + zi*nz - shift
-
-                    # ns = floor(plane_dist / layer_dist) + (n_layers // 2)
-                    # We approximate n_layers center.
-                    # Just use plane_dist / layer_dist
-
-                    layer_idx = floor(Int, abs(plane_dist) / layer_dist) + 1
-                    f_idx = mod1(layer_idx, length(facies_val))
-                    f_array[I] = facies_val[f_idx]
-                else
-                    f_array[I] = facies_val[1]
-                end
-
-                dip_rad = deg2rad(dip_limit)
-                dip_dir_rad = coterminal_angle(dip_dir_val)
-                dip_array[I] = dip_rad
-                dip_dir_array[I] = dip_dir_rad
             end
         end
     end
@@ -152,9 +159,10 @@ function half_ellipsoid!(
     internal_layering = false,
     alternating_facies = false,
     bulb = false,
-    dip = 0.0,
-    dip_dir = 0.0,
-    layer_dist = 0.0,
+    dip = 0,
+    dip_dir = 0,
+    layer_dist = 0,
+    ϵ_bbox = 1e-4
 )
 
     # Backend determination
@@ -169,6 +177,20 @@ function half_ellipsoid!(
     # Rotation math for BBox
     sin_a = sin(alpha)
     cos_a = cos(alpha)
+
+    # Half-widths
+    dx_len = sqrt((a*cos_a)^2 + (b*sin_a)^2)
+    dy_len = sqrt((a*sin_a)^2 + (b*cos_a)^2)
+    dz_len = c
+
+    # Physical bounds
+    b_xmin, b_xmax = x_c - dx_len, x_c + dx_len
+    b_ymin, b_ymax = y_c - dy_len, y_c + dy_len
+    b_zmin, b_zmax = z_c - dz_len, z_c # Trough is usually top-down, but cover full c extent
+
+   # Add a tiny buffer (epsilon) to be safe
+    box_min = (x_c - dx_len - ϵ_bbox, y_c - dy_len - ϵ_bbox, z_c - dz_len - ϵ_bbox)
+    box_max = (x_c + dx_len + ϵ_bbox, y_c + dy_len + ϵ_bbox, z_c + dz_len + ϵ_bbox)
 
     # Extents
     # We want to find the range of indices in x, y, z that cover the ellipsoid.
@@ -209,7 +231,9 @@ function half_ellipsoid!(
         bulb,
         dip,
         dip_dir,
-        layer_dist;
+        layer_dist,
+        box_min,
+        box_max;
         ndrange = ndrange,
     )
 
