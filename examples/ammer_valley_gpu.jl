@@ -41,20 +41,23 @@ zs = range(H - delz/2, length=nlay, step=-delz)
 # Create 3D arrays directly on GPU
 # x varies along col (dim 3)
 xs_gpu = CuArray(Float32.(xs))
-x_3d = repeat(reshape(xs_gpu, 1, 1, ncol), nlay, nrow, 1)
+x_3d = repeat(reshape(xs_gpu, ncol, 1, 1), 1, nrow, nlay)
 
 # y varies along row (dim 2)
 ys_gpu = CuArray(Float32.(ys))
-y_3d = repeat(reshape(ys_gpu, 1, nrow, 1), nlay, 1, ncol)
+y_3d = repeat(reshape(ys_gpu, 1, nrow, 1), ncol, 1, nlay)
 
 # z varies along layer (dim 1)
 zs_gpu = CuArray(Float32.(zs))
-z_3d = repeat(reshape(zs_gpu, nlay, 1, 1), 1, nrow, ncol)
+z_3d = repeat(reshape(zs_gpu, 1, 1, nlay), ncol, nrow, 1)
+
+# Create Grid
+grid = RectilinearGrid(xs_gpu, ys_gpu, zs_gpu)
 
 # Arrays for properties
-facies = CUDA.fill(7, nlay, nrow, ncol) # Default facies 7 (Int)
-dip = CUDA.zeros(Float32, nlay, nrow, ncol)
-dip_dir = CUDA.zeros(Float32, nlay, nrow, ncol)
+facies = CUDA.fill(7, ncol, nrow, nlay) # Default facies 7 (Int)
+dip_arr = CUDA.zeros(Float32, ncol, nrow, nlay)
+dip_dir_arr = CUDA.zeros(Float32, ncol, nrow, nlay)
 
 # ==============================================================================
 # 2. Surface Generation
@@ -70,11 +73,11 @@ corl_top = [70.0f0, 792.0f0]
 # specsim_surface runs on CPU (FFTW dependency in HyVR currently)
 # We generate coordinates on CPU for this single step
 # Note: xs and ys are Ranges, so we can broadcast to 2D
-x_2d_cpu = zeros(Float32, nrow, ncol)
-y_2d_cpu = zeros(Float32, nrow, ncol)
+x_2d_cpu = zeros(Float32, ncol, nrow)
+y_2d_cpu = zeros(Float32, ncol, nrow)
 for j in 1:ncol, i in 1:nrow
-    x_2d_cpu[i, j] = xs[j]
-    y_2d_cpu[i, j] = ys[i]
+    x_2d_cpu[j, i] = xs[j]
+    y_2d_cpu[j, i] = ys[i]
 end
 
 # Arguments need to be Float64 for specsim if the internal implementation assumes it?
@@ -117,9 +120,9 @@ println("Total thickness: ", sum(thicknesses))
 # ==============================================================================
 
 # Flattened 2D coordinates for distance calc (Row, Col plane)
-# x_3d[1, :, :] is (nrow, ncol)
-x_flat = vec(x_3d[1, :, :])
-y_flat = vec(y_3d[1, :, :])
+# x_3d[:, :, 1] is (nrow, ncol)
+x_flat = vec(x_3d[:, :, 1])
+y_flat = vec(y_3d[:, :, 1])
 
 # ==============================================================================
 # 5. Sedimentary Structure Modeling
@@ -186,10 +189,10 @@ for (idx, thick_val) in enumerate(thicknesses)
     num_indices = Int(floor(length(p) * 0.2))
     selected_indices = p[end-num_indices+1:end]
     
-    primitive_layer = CUDA.fill(7, nrow, ncol)
+    primitive_layer = CUDA.fill(7, ncol, nrow)
     primitive_flat = vec(primitive_layer)
     primitive_flat[selected_indices] .= 6
-    primitive_layer = reshape(primitive_flat, nrow, ncol)
+    primitive_layer = reshape(primitive_flat, ncol, nrow)
     
     # Assign to facies
     # Use GPU broadcast for assignment
@@ -199,7 +202,7 @@ for (idx, thick_val) in enumerate(thicknesses)
     for k in 1:nlay
         z_val = zs_cpu[k]
         if z_val >= z_0
-            facies[k, :, :] .= primitive_layer
+            facies[:, :, k] .= primitive_layer
         end
     end
     
@@ -219,10 +222,8 @@ for (idx, thick_val) in enumerate(thicknesses)
         c = thick
         azim = Float32(rand(Uniform(-20, 20)))
         
-        half_ellipsoid!(
-            facies, dip, dip_dir,
-            x_3d, y_3d, z_3d,
-            (x_c, y_c, z_c),
+        half_ellipsoid!(facies, dip_arr, dip_dir_arr,
+            grid, (x_c, y_c, z_c),
             (a, b, c),
             azim,
             2,
@@ -244,10 +245,8 @@ for (idx, thick_val) in enumerate(thicknesses)
         cx, cy = Float32.(ch[1]), Float32.(ch[2])
         curve_mat = CuArray(hcat(cx, cy))
         
-        channel!(
-            facies, dip, dip_dir,
-            x_3d, y_3d, z_3d,
-            z_top_curr,
+        channel!(facies, dip_arr, dip_dir_arr,
+            grid, z_top_curr,
             curve_mat,
             [30.0f0, thick],
             4
@@ -258,10 +257,8 @@ for (idx, thick_val) in enumerate(thicknesses)
         cx, cy = Float32.(ch[1]), Float32.(ch[2])
         curve_mat = CuArray(hcat(cx, cy))
         
-        channel!(
-            facies, dip, dip_dir,
-            x_3d, y_3d, z_3d,
-            z_top_curr,
+        channel!(facies, dip_arr, dip_dir_arr,
+            grid, z_top_curr,
             curve_mat,
             [20.0f0, thick],
             4
@@ -281,11 +278,11 @@ for (idx, thick_val) in enumerate(thicknesses)
     end
     
     # Masking on GPU
-    mask_water = (facies[layer_idx, :, :] .== 2) .| (facies[layer_idx, :, :] .== 4)
+    mask_water = (facies[:, :, layer_idx] .== 2) .| (facies[:, :, layer_idx] .== 4)
     if count(mask_water) > 0
         # Transfer water body coordinates to CPU for sampling
-        xs_water_cpu = Array(x_3d[layer_idx, :, :][mask_water])
-        ys_water_cpu = Array(y_3d[layer_idx, :, :][mask_water])
+        xs_water_cpu = Array(x_3d[:, :, layer_idx][mask_water])
+        ys_water_cpu = Array(y_3d[:, :, layer_idx][mask_water])
         
         while p_peat < 0.20
             idx = rand(1:length(xs_water_cpu))
@@ -298,10 +295,8 @@ for (idx, thick_val) in enumerate(thicknesses)
             azim = Float32(rand(Uniform(-20, 20)))
             f_code = rand([8, 9])
             
-            half_ellipsoid!(
-                facies, dip, dip_dir,
-                x_3d, y_3d, z_3d,
-                (x_c, y_c, z_c),
+            half_ellipsoid!(facies, dip_arr, dip_dir_arr,
+                grid, (x_c, y_c, z_c),
                 (a, b, c_peat),
                 azim,
                 f_code
@@ -399,10 +394,8 @@ for h_val in heights
         c = rand(Uniform(thick, thick + 0.2f0))
         azim = Float32(rand(Uniform(-20, 20)))
         
-        half_ellipsoid!(
-            facies, dip, dip_dir,
-            x_3d, y_3d, z_3d,
-            (xt, yt, zt),
+        half_ellipsoid!(facies, dip_arr, dip_dir_arr,
+            grid, (xt, yt, zt),
             (a, b, c),
             azim,
             11
@@ -414,10 +407,8 @@ for h_val in heights
     end
     
     curve_mat = CuArray(hcat(Float32.(gravel_channel[1]), Float32.(gravel_channel[2])))
-    channel!(
-        facies, dip, dip_dir,
-        x_3d, y_3d, z_3d,
-        h_val + thick,
+    channel!(facies, dip_arr, dip_dir_arr,
+        grid, h_val + thick,
         curve_mat,
         [25.0f0, thick + 0.2f0],
         12
@@ -431,8 +422,8 @@ end
 # ==============================================================================
 
 # Broadcast surfaces
-surf_top_gpu = reshape(CuArray(surf_top), 1, nrow, ncol)
-surf_botm_gpu = reshape(CuArray(surf_botm), 1, nrow, ncol)
+surf_top_gpu = reshape(CuArray(surf_top), ncol, nrow, 1)
+surf_botm_gpu = reshape(CuArray(surf_botm), ncol, nrow, 1)
 
 facies[z_3d .>= surf_top_gpu] .= 21
 facies[z_3d .<= surf_botm_gpu] .= 31
@@ -455,13 +446,13 @@ mid_j = div(ncol, 2)
 fig = Figure(size=(1200, 800))
 
 ax1 = Axis(fig[1, 1], title="Planar View (Layer $mid_k)", xlabel="x", ylabel="y")
-hm1 = heatmap!(ax1, xs, ys, transpose(facies_cpu[mid_k, :, :]), colormap=:turbo)
+hm1 = heatmap!(ax1, xs, ys, facies_cpu[:, :, mid_k], colormap=:turbo)
 
 ax2 = Axis(fig[1, 2], title="Cross-section (Col $mid_j)", xlabel="y", ylabel="z")
-hm2 = heatmap!(ax2, ys, zs, transpose(facies_cpu[:, :, mid_j]), colormap=:turbo)
+hm2 = heatmap!(ax2, ys, zs, facies_cpu[mid_j, :, :], colormap=:turbo)
 
 ax3 = Axis(fig[2, 1], title="Longitudinal (Row $mid_i)", xlabel="x", ylabel="z")
-hm3 = heatmap!(ax3, xs, zs, transpose(facies_cpu[:, mid_i, :]), colormap=:turbo)
+hm3 = heatmap!(ax3, xs, zs, facies_cpu[:, mid_i, :], colormap=:turbo)
 
 Colorbar(fig[1, 3], hm1, label="Facies")
 

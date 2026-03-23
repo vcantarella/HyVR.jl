@@ -41,20 +41,21 @@ zs = range(H - delz/2, length = nlay, step = -delz)
 # y_3d[k, i, j] = ys[i]
 # z_3d[k, i, j] = zs[k]
 
-x_3d = zeros(Float64, nlay, nrow, ncol)
-y_3d = zeros(Float64, nlay, nrow, ncol)
-z_3d = zeros(Float64, nlay, nrow, ncol)
+x_3d = zeros(Float64, ncol, nrow, nlay)
+y_3d = zeros(Float64, ncol, nrow, nlay)
+z_3d = zeros(Float64, ncol, nrow, nlay)
 
 for k = 1:nlay, i = 1:nrow, j = 1:ncol
-    x_3d[k, i, j] = xs[j]
-    y_3d[k, i, j] = ys[i]
-    z_3d[k, i, j] = zs[k]
+    x_3d[j, i, k] = xs[j]
+    y_3d[j, i, k] = ys[i]
+    z_3d[j, i, k] = zs[k]
 end
+grid = RectilinearGrid(xs, ys, zs)
 
 # Arrays for properties
-facies = fill(2, nlay, nrow, ncol) # Default facies 7
-dip = zeros(Float64, nlay, nrow, ncol)
-dip_dir = zeros(Float64, nlay, nrow, ncol)
+facies = fill(2, ncol, nrow, nlay) # Default facies 7
+dip_arr = zeros(Float64, ncol, nrow, nlay)
+dip_dir_arr = zeros(Float64, ncol, nrow, nlay)
 
 # ==============================================================================
 # 2. Surface Generation
@@ -69,8 +70,8 @@ corl_top = [70.0, 60.0]
 
 # specsim_surface expects 2D grid of x and y
 # We take the first layer's x and y
-x_2d = x_3d[1, :, :]
-y_2d = y_3d[1, :, :]
+x_2d = x_3d[:, :, 1]
+y_2d = y_3d[:, :, 1]
 
 surf_top = specsim_surface(x_2d, y_2d, mean_top, var_top, corl_top)
 
@@ -81,11 +82,11 @@ corl_botm = [300.0, 300.0]
 
 surf_botm = specsim_surface(x_2d, y_2d, mean_botm, var_botm, corl_top) # Using corl_top as per python script? Or typo in python? Python says `corl=corl_top`.
 
-for j in axes(z_3d, 1) # number of layers:
-    top_index = z_3d[j, :, :] .> surf_top
-    local_facies = @view facies[j, :, :]
+for j in axes(z_3d, 3) # number of layers
+    top_index = z_3d[:, :, j] .> surf_top
+    local_facies = @view facies[:, :, j]
     local_facies[top_index] .= 1
-    bottom_index = z_3d[j, :, :] .< surf_botm
+    bottom_index = z_3d[:, :, j] .< surf_botm
     local_facies[bottom_index] .= 3
 end
 
@@ -104,17 +105,17 @@ fig = Figure(size = (1200, 800))
 
 # Planar view (Middle Z)
 ax1 = Axis(fig[1, 1], title = "Planar View (Layer $mid_k)", xlabel = "x", ylabel = "y")
-hm1 = heatmap!(ax1, xs, ys, transpose(facies[mid_k, :, :]), colormap = :turbo)
+hm1 = heatmap!(ax1, xs, ys, facies[:, :, mid_k], colormap = :turbo)
 
 # Cross-section (Middle Col -> Y-Z plane)
 # facies[:, :, mid_j] is (nlay, nrow) -> (z, y)
 # The facies array needs to be transposed for Makie.
 ax2 = Axis(fig[1, 2], title = "Cross-section (Col $mid_j)", xlabel = "y", ylabel = "z")
-hm2 = heatmap!(ax2, ys, zs, transpose(facies[:, :, mid_j]), colormap = :turbo)
+hm2 = heatmap!(ax2, ys, zs, facies[mid_j, :, :], colormap = :turbo)
 
 # Longitudinal (Middle Row -> X-Z plane)
 ax3 = Axis(fig[2, 1], title = "Longitudinal (Row $mid_i)", xlabel = "x", ylabel = "z")
-hm3 = heatmap!(ax3, xs, zs, transpose(facies[:, mid_i, :]), colormap = :turbo)
+hm3 = heatmap!(ax3, xs, zs, facies[:, mid_i, :], colormap = :turbo)
 
 Colorbar(fig[1, 3], hm1, label = "Facies")
 

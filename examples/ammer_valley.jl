@@ -41,20 +41,21 @@ zs = range(H - delz/2, length = nlay, step = -delz)
 # y_3d[k, i, j] = ys[i]
 # z_3d[k, i, j] = zs[k]
 
-x_3d = zeros(Float64, nlay, nrow, ncol)
-y_3d = zeros(Float64, nlay, nrow, ncol)
-z_3d = zeros(Float64, nlay, nrow, ncol)
+x_3d = zeros(Float64, ncol, nrow, nlay)
+y_3d = zeros(Float64, ncol, nrow, nlay)
+z_3d = zeros(Float64, ncol, nrow, nlay)
 
 for k = 1:nlay, i = 1:nrow, j = 1:ncol
-    x_3d[k, i, j] = xs[j]
-    y_3d[k, i, j] = ys[i]
-    z_3d[k, i, j] = zs[k]
+    x_3d[j, i, k] = xs[j]
+    y_3d[j, i, k] = ys[i]
+    z_3d[j, i, k] = zs[k]
 end
+grid = RectilinearGrid(xs, ys, zs)
 
 # Arrays for properties
-facies = fill(7, nlay, nrow, ncol) # Default facies 7
-dip = zeros(Float64, nlay, nrow, ncol)
-dip_dir = zeros(Float64, nlay, nrow, ncol)
+facies = fill(7, ncol, nrow, nlay) # Default facies 7
+dip_arr = zeros(Float64, ncol, nrow, nlay)
+dip_dir_arr = zeros(Float64, ncol, nrow, nlay)
 
 # ==============================================================================
 # 2. Surface Generation
@@ -69,8 +70,8 @@ corl_top = [70.0, 792.0]
 
 # specsim_surface expects 2D grid of x and y
 # We take the first layer's x and y
-x_2d = x_3d[1, :, :]
-y_2d = y_3d[1, :, :]
+x_2d = x_3d[:, :, 1]
+y_2d = y_3d[:, :, 1]
 
 surf_top = specsim_surface(x_2d, y_2d, mean_top, var_top, corl_top)
 
@@ -110,8 +111,8 @@ println("Total thickness: ", sum(thicknesses))
 
 # Flattened 2D coordinates for distance calc (Row, Col plane)
 # In Python script: X[0,:,:].ravel() -> flattened 2D plane
-x_flat = vec(x_3d[1, :, :])
-y_flat = vec(y_3d[1, :, :])
+x_flat = vec(x_3d[:, :, 1])
+y_flat = vec(y_3d[:, :, 1])
 
 # ==============================================================================
 # 5. Sedimentary Structure Modeling
@@ -199,11 +200,11 @@ for (idx, thick) in enumerate(thicknesses)
     num_indices = Int(floor(length(p) * 0.2))
     selected_indices = p[(end-num_indices+1):end]
 
-    primitive_layer = fill(7, nrow, ncol) # Default 7
+    primitive_layer = fill(7, ncol, nrow) # Default 7
     # Flat indexing mapping to 2D
     primitive_flat = vec(primitive_layer)
     primitive_flat[selected_indices] .= 6
-    primitive_layer = reshape(primitive_flat, nrow, ncol)
+    primitive_layer = reshape(primitive_flat, ncol, nrow)
 
     # Assign to facies array for current z interval
     # z_ is column of z coordinates.
@@ -213,7 +214,7 @@ for (idx, thick) in enumerate(thicknesses)
     for k = 1:nlay
         z_val = zs[k]
         if z_val >= z_0
-            facies[k, :, :] .= primitive_layer
+            facies[:, :, k] .= primitive_layer
         end
     end
 
@@ -237,20 +238,20 @@ for (idx, thick) in enumerate(thicknesses)
         b = rand(Uniform(30, 60))
         c = thick
         azim = rand(Uniform(-20, 20))
+        dip = rand(Uniform(4,30))
+        dip_dir = rand(Uniform(0, 180))
+        fs = [3,4,5,6]
 
         # Facies 2 for ponds
-        half_ellipsoid!(
-            facies,
-            dip,
-            dip_dir,
-            x_3d,
-            y_3d,
-            z_3d,
-            (x_c, y_c, z_c),
+        half_ellipsoid!(facies, dip_arr, dip_dir_arr,
+            grid, (x_c, y_c, z_c),
             (a, b, c),
             azim,
-            2, # Facies ID
-            internal_layering = false,
+            fs, # Facies ID
+            internal_layering = true,
+            layer_dist = 0.2,
+            alternating_facies = true,
+            facies_p = [0.5, 0.1, 0.2, 0.2]
         )
 
         # Calculate proportion
@@ -258,7 +259,7 @@ for (idx, thick) in enumerate(thicknesses)
         mask = (z_3d .>= z_0) .& (z_3d .<= z_top_curr)
         count_mask = count(mask)
         if count_mask > 0
-            p_ponds = count((facies .== 2) .& mask) / count_mask
+            p_ponds = count((in.(facies, Ref(fs))) .& mask) / count_mask
         else
             p_ponds = 1.0 # break
         end
@@ -272,14 +273,8 @@ for (idx, thick) in enumerate(thicknesses)
         # Convert curve to matrix Nx2
         curve_mat = hcat(cx, cy)
 
-        channel!(
-            facies,
-            dip,
-            dip_dir,
-            x_3d,
-            y_3d,
-            z_3d,
-            z_top_curr, # z_top
+        channel!(facies, dip_arr, dip_dir_arr,
+            grid, z_top_curr, # z_top
             curve_mat,
             [30.0, thick], # width, depth
             4, # Facies
@@ -291,14 +286,8 @@ for (idx, thick) in enumerate(thicknesses)
         cx, cy = ch[1], ch[2]
         curve_mat = hcat(cx, cy)
 
-        channel!(
-            facies,
-            dip,
-            dip_dir,
-            x_3d,
-            y_3d,
-            z_3d,
-            z_top_curr,
+        channel!(facies, dip_arr, dip_dir_arr,
+            grid, z_top_curr,
             curve_mat,
             [20.0, thick],
             4,
@@ -335,10 +324,10 @@ for (idx, thick) in enumerate(thicknesses)
     end
 
     # Get coordinates where facies is 2 or 4
-    mask_water = (facies[layer_idx, :, :] .== 2) .| (facies[layer_idx, :, :] .== 4)
+    mask_water = (facies[:, :, layer_idx] .== 2) .| (facies[:, :, layer_idx] .== 4)
     if count(mask_water) > 0
-        xs_water = x_3d[layer_idx, :, :][mask_water]
-        ys_water = y_3d[layer_idx, :, :][mask_water]
+        xs_water = x_3d[:, :, layer_idx][mask_water]
+        ys_water = y_3d[:, :, layer_idx][mask_water]
 
         while p_peat < 0.20
             idx = rand(1:length(xs_water))
@@ -352,14 +341,8 @@ for (idx, thick) in enumerate(thicknesses)
             azim = rand(Uniform(-20, 20))
             f_code = rand([8, 9])
 
-            half_ellipsoid!(
-                facies,
-                dip,
-                dip_dir,
-                x_3d,
-                y_3d,
-                z_3d,
-                (x_c, y_c, z_c),
+            half_ellipsoid!(facies, dip_arr, dip_dir_arr,
+                grid, (x_c, y_c, z_c),
                 (a, b, c_peat),
                 azim,
                 f_code,
@@ -476,14 +459,8 @@ for h_val in heights
         c = rand(Uniform(thick, thick + 0.2))
         azim = rand(Uniform(-20, 20))
 
-        half_ellipsoid!(
-            facies,
-            dip,
-            dip_dir,
-            x_3d,
-            y_3d,
-            z_3d,
-            (xt, yt, zt),
+        half_ellipsoid!(facies, dip_arr, dip_dir_arr,
+            grid, (xt, yt, zt),
             (a, b, c),
             azim,
             11,
@@ -501,14 +478,8 @@ for h_val in heights
 
     # Add channel facies
     curve_mat = hcat(cx, cy)
-    channel!(
-        facies,
-        dip,
-        dip_dir,
-        x_3d,
-        y_3d,
-        z_3d,
-        h_val + thick,
+    channel!(facies, dip_arr, dip_dir_arr,
+        grid, h_val + thick,
         curve_mat,
         [25.0, thick + 0.2],
         12,
@@ -531,11 +502,11 @@ end
 # surf_top calculated from x_2d, y_2d which matches i,j of 3D grid.
 
 for k = 1:nlay, i = 1:nrow, j = 1:ncol
-    if z_3d[k, i, j] >= surf_top[i, j]
-        facies[k, i, j] = 21
+    if z_3d[j, i, k] >= surf_top[j, i]
+        facies[j, i, k] = 21
     end
-    if z_3d[k, i, j] <= surf_botm[i, j]
-        facies[k, i, j] = 31
+    if z_3d[j, i, k] <= surf_botm[j, i]
+        facies[j, i, k] = 31
     end
 end
 
@@ -555,17 +526,17 @@ fig = Figure(size = (1200, 800))
 
 # Planar view (Middle Z)
 ax1 = Axis(fig[1, 1], title = "Planar View (Layer $mid_k)", xlabel = "x", ylabel = "y")
-hm1 = heatmap!(ax1, xs, ys, transpose(facies[mid_k, :, :]), colormap = :turbo)
+hm1 = heatmap!(ax1, xs, ys, facies[:, :, mid_k], colormap = :turbo)
 
 # Cross-section (Middle Col -> Y-Z plane)
 # facies[:, :, mid_j] is (nlay, nrow) -> (z, y)
 # The facies array needs to be transposed for Makie.
 ax2 = Axis(fig[1, 2], title = "Cross-section (Col $mid_j)", xlabel = "y", ylabel = "z")
-hm2 = heatmap!(ax2, ys, zs, transpose(facies[:, :, mid_j]), colormap = :turbo)
+hm2 = heatmap!(ax2, ys, zs, facies[mid_j, :, :], colormap = :turbo)
 
 # Longitudinal (Middle Row -> X-Z plane)
 ax3 = Axis(fig[2, 1], title = "Longitudinal (Row $mid_i)", xlabel = "x", ylabel = "z")
-hm3 = heatmap!(ax3, xs, zs, transpose(facies[:, mid_i, :]), colormap = :turbo)
+hm3 = heatmap!(ax3, xs, zs, facies[:, mid_i, :], colormap = :turbo)
 
 Colorbar(fig[1, 3], hm1, label = "Facies")
 

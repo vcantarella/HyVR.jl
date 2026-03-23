@@ -25,7 +25,7 @@ In-place modification of arrays for trough object.
     @Const(alpha),
     @Const(facies_val),
     @Const(internal_layering),
-    @Const(alternating_facies),
+    @Const(layer_facies_seq),
     @Const(bulb),
     @Const(dip_limit),
     @Const(dip_dir_val),
@@ -68,42 +68,9 @@ In-place modification of arrays for trough object.
 
                     # Assign Facies
                     if internal_layering
-                        # This requires facies array logic which is hard in kernel without alloc
-                        # Simplification: Calculate index and map to facies value if facies is passed as scalar or tuple
-                        # Since facies can be an array, we pass it.
-                        # Note: accessing arrays in kernels is fine.
-
-                        # n_layers calculation
-                        # Python: n_layers = int(ceil(max(norm_dist) * c / layer_dist))
-                        # We can't know max(norm_dist) for the whole object here easily without a separate pass.
-                        # However, max norm_dist is 1.0 at boundary.
-                        # So max_dist approx c (in Z) or scaled.
-                        # Actually norm_distance is normalized. Max is 1.
-
-                        # Facies calculation
-                        # ns = floor(norm_dist * c / layer_dist)
-
-                        # We need to handle alternating facies logic.
-                        # If we just mod index, it works.
-
-                        # Assuming facies is a 1D array on GPU/CPU
-
-                        # idx = floor(Int, norm_dist * c / layer_dist) + 1
-                        # val = facies[mod1(idx, length(facies))]
-                        # f_array[I] = val
-
-                        # Placeholder for exact logic:
-                        # Python logic uses 'get_alternating_facies' pre-calc.
-                        # We can emulate modulo.
-
                         layer_idx = floor(Int, norm_dist * c / layer_dist) + 1
-                        # Alternating logic usually just cycles through the available facies
-                        # If not alternating, it chooses random. Random in kernel is tricky.
-                        # We assume alternating=True or just deterministic mapping for reproduction.
-
-                        f_idx = mod1(layer_idx, length(facies_val)) # facies_val is the array
-                        f_array[I] = facies_val[f_idx]
-
+                        f_idx = mod1(layer_idx, length(layer_facies_seq))
+                        f_array[I] = layer_facies_seq[f_idx]
                     else
                         # Homogeneous
                         # facies_val might be array, take first or if scalar
@@ -117,17 +84,12 @@ In-place modification of arrays for trough object.
                     # Massive or planar internal
                     if internal_layering
                         nx, ny, nz = normal_plane_from_dip_dip_dir(dip_limit, dip_dir_val)
-                        # shift = layer_dist + nx*x_c + ny*y_c + nz*z_c
                         shift = layer_dist + nx*x_c + ny*y_c + nz*z_c
                         plane_dist = xi*nx + yi*ny + zi*nz - shift
 
-                        # ns = floor(plane_dist / layer_dist) + (n_layers // 2)
-                        # We approximate n_layers center.
-                        # Just use plane_dist / layer_dist
-
                         layer_idx = floor(Int, abs(plane_dist) / layer_dist) + 1
-                        f_idx = mod1(layer_idx, length(facies_val))
-                        f_array[I] = facies_val[f_idx]
+                        f_idx = mod1(layer_idx, length(layer_facies_seq))
+                        f_array[I] = layer_facies_seq[f_idx]
                     else
                         f_array[I] = facies_val[1]
                     end
@@ -153,6 +115,7 @@ function half_ellipsoid!(
     facies;
     internal_layering = false,
     alternating_facies = false,
+    facies_p = nothing,
     bulb = false,
     dip = 0,
     dip_dir = 0,
@@ -199,6 +162,37 @@ function half_ellipsoid!(
     # For now, we launch over the whole grid for correctness, assuming grid size isn't massive or GPU handles it.
     # Optimization: If x,y,z are coordinate arrays, we could find indices.
 
+    # Precalculate layering facies map
+    if layer_dist > 0
+        n_layers_approx = ceil(Int, c / layer_dist) + 2
+    else
+        n_layers_approx = 2
+    end
+    if !alternating_facies
+        # Cycle through array
+        seq = [facies[mod1(i, length(facies))] for i in 1:n_layers_approx]
+        layer_facies_seq = Tuple(seq)
+    else
+        # Select randomly according to facies_p
+        if isnothing(facies_p)
+            facies_p = fill(1.0/length(facies), length(facies))
+        end
+        cum_p = cumsum(facies_p)
+        seq = Vector{Int}(undef, n_layers_approx)
+        for i in 1:n_layers_approx
+            r = rand()
+            idx = length(facies)
+            for j in 1:length(cum_p)
+                if r <= cum_p[j]
+                    idx = j
+                    break
+                end
+            end
+            seq[i] = facies[idx]
+        end
+        layer_facies_seq = Tuple(seq)
+    end
+
     # Launch kernel
     kernel = half_ellipsoid_kernel!(backend)
     ndrange = grid_size(grid)
@@ -220,7 +214,7 @@ function half_ellipsoid!(
         alpha,
         facies_arr,
         internal_layering,
-        alternating_facies,
+        layer_facies_seq,
         bulb,
         dip,
         dip_dir,
