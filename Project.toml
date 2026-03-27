@@ -15,7 +15,7 @@ StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 
 [compat]
 FFTW = "1"
-Interpolations = "0.15"
+Interpolations = "0.15, 0.16"
 KernelAbstractions = "0.9"
 StaticArrays = "1"
 StochasticDiffEq = "6.92.0"
